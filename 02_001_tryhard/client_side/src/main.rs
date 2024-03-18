@@ -4,7 +4,7 @@ use pktlib::{
     handshake::{Handshake, HandshakeState},
     packet::PacketProcessor,
 };
-use std::{cmp::min, error::Error, io::Cursor};
+use std::{error::Error, io::Cursor};
 use tokio::{
     io::{self, AsyncWriteExt},
     net::TcpStream,
@@ -87,7 +87,7 @@ async fn process_socket(mut socket: TcpStream) -> Result<(), Box<dyn Error>> {
 async fn main() -> Result<(), Box<dyn Error>> {
     let socket = TcpStream::connect("localhost:13132").await?;
 
-    process_socket(socket).await;
+    process_socket(socket).await?;
 
     Ok(())
 }

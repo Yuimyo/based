@@ -4,7 +4,7 @@ use pktlib::{
     handshake::{Handshake, HandshakeState},
     packet::PacketProcessor,
 };
-use std::{cmp::min, error::Error, io::Cursor};
+use std::{error::Error, io::Cursor};
 use tokio::{
     io::{self, AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
