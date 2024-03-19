@@ -1,5 +1,10 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::{collections::VecDeque, io::Cursor};
+use std::{
+    collections::VecDeque,
+    error::Error,
+    io::{Cursor, Write},
+};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 
 pub struct PacketProcessor {
     pkt_queue: VecDeque<Vec<u8>>,
@@ -49,11 +54,14 @@ impl PacketProcessor {
         None
     }
 
-    pub fn format(data: &[u8]) -> Bytes {
-        let mut buf = BytesMut::new();
-        buf.put_u32(data.len() as u32);
-        buf.extend_from_slice(data);
-        buf.freeze()
+    pub async fn format_and_write<W: AsyncWriteExt + Unpin>(
+        buf: &mut BufWriter<W>,
+        data: &[u8],
+    ) -> Result<(), Box<dyn Error>> {
+        buf.write_u32(data.len() as u32).await?;
+        buf.write_all(data).await?;
+
+        Ok(())
     }
 }
 
@@ -84,11 +92,14 @@ mod packet_processor {
         assert_eq!(pp.buf.len(), 2);
     }
 
-    #[test]
-    fn format_data() {
-        let data = [72u8, 0u8];
-        let actual = PacketProcessor::format(&data);
-        assert_eq!(actual, vec![0u8, 0u8, 0u8, 2u8, 72u8, 0u8]);
+    #[tokio::test]
+    async fn format_data() {
+        let data = vec![72u8, 0u8];
+        let mut buf = BufWriter::new(Vec::new());
+        PacketProcessor::format_and_write(&mut buf, &data)
+            .await
+            .unwrap();
+        assert_eq!(buf.buffer(), vec![0u8, 0u8, 0u8, 2u8, 72u8, 0u8]);
     }
 
     // packet長にとんでもなく大きい値がきたときに弾いとくと安全な気もする。

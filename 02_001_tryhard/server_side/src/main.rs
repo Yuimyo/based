@@ -6,7 +6,7 @@ use pktlib::{
 };
 use std::{error::Error, io::Cursor};
 use tokio::{
-    io::{self, AsyncReadExt, AsyncWriteExt},
+    io::{self, AsyncReadExt, AsyncWriteExt, BufWriter},
     net::{TcpListener, TcpStream},
 };
 
@@ -19,9 +19,10 @@ fn print_recv_bytes(recv_bytes: &[u8]) {
     println!("{:?}", recv_values);
 }
 
-async fn process_socket(mut socket: TcpStream) -> Result<(), Box<dyn Error>> {
+async fn process_socket(socket: TcpStream) -> Result<(), Box<dyn Error>> {
     println!("started.");
 
+    let mut socket: BufWriter<TcpStream> = BufWriter::new(socket);
     let mut packet_processor = PacketProcessor::new();
     let mut buf = Bytes::new();
 
@@ -31,8 +32,8 @@ async fn process_socket(mut socket: TcpStream) -> Result<(), Box<dyn Error>> {
         if handshake.required_to_read() {
             while !packet_processor.has_packet() {
                 let mut buf = BytesMut::with_capacity(512);
-                socket.readable().await?;
-                match socket.try_read_buf(&mut buf) {
+                socket.get_ref().readable().await?;
+                match socket.get_ref().try_read_buf(&mut buf) {
                     Ok(_) => {
                         packet_processor.put(&buf[..]);
                         break;
@@ -53,21 +54,15 @@ async fn process_socket(mut socket: TcpStream) -> Result<(), Box<dyn Error>> {
         match handshake.communicate(&buf) {
             HandshakeState::InProgress { send_bytes } => {
                 if !send_bytes.is_empty() {
-                    socket.writable().await?;
-                    socket
-                        .write_all(&PacketProcessor::format(&send_bytes[..])[..])
-                        .await
-                        .unwrap();
+                    socket.get_ref().writable().await?;
+                    PacketProcessor::format_and_write(&mut socket, &send_bytes[..]).await?;
                     socket.flush().await?;
                 }
             }
             HandshakeState::Finished { send_bytes } => {
                 if !send_bytes.is_empty() {
-                    socket.writable().await?;
-                    socket
-                        .write_all(&PacketProcessor::format(&send_bytes[..])[..])
-                        .await
-                        .unwrap();
+                    socket.get_ref().writable().await?;
+                    PacketProcessor::format_and_write(&mut socket, &send_bytes[..]).await?;
                     socket.flush().await?;
                 }
                 break;
